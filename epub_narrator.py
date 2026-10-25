@@ -812,6 +812,23 @@ def build_chapters(epub: Epub, ccfg: dict) -> list[Chapter]:
 # Ollama
 # =============================================================================
 
+# Error messages Ollama is known to send, and what to do about each (matched case-insensitively).
+OLLAMA_HINTS = [
+    (r"not found|try pulling", "run `ollama pull {model}`, or set ollama.model to a model that `ollama list` shows"),
+    (r"more system memory|out of memory|cudaMalloc|unable to allocate|insufficient memory",
+     "not enough memory for {model}: use a smaller model or a lower ollama.num_ctx, and close other programs "
+     "that use the GPU"),
+    (r"runner process (has )?(terminated|exited)|unexpectedly stopped|exit status",
+     "Ollama's model process crashed, most often because the GPU ran out of memory: try a lower ollama.num_ctx "
+     "or a smaller model; Ollama's server log has the cause"),
+    (r"does not support thinking", "{model} has no thinking mode: remove `think` from [ollama] in config.toml"),
+    (r"does not support (chat|generate|completion)",
+     "{model} is not a chat model: set ollama.model to an instruction-tuned model"),
+    (r"server busy|maximum pending", "Ollama is busy with other requests: let them finish, then run again"),
+    (r"invalid format", "this Ollama is too old for JSON-schema answers: update Ollama (0.5 or newer)"),
+]
+
+
 class Ollama:
     def __init__(self, cfg: dict):
         self.url = cfg["url"].rstrip("/")
@@ -823,13 +840,44 @@ class Ollama:
         self.session = requests.Session()
         self.used = False
 
+    def read_error(self, failure: requests.Response | requests.RequestException) -> str:
+        """Describe a failed Ollama call: Ollama's own error message (it answers {"error": "..."}),
+        or what went wrong with the connection, plus a hint for errors with a known fix."""
+        if isinstance(failure, requests.ConnectTimeout):
+            return f"could not connect to Ollama at {self.url} (is it running?)"
+        if isinstance(failure, requests.Timeout):
+            return (f"Ollama gave no answer within {self.timeout:g}s: a big model or a long passage may need "
+                    "a higher ollama.timeout")
+        if isinstance(failure, requests.ConnectionError):
+            return f"could not reach Ollama at {self.url} (has it stopped or crashed?)"
+        if isinstance(failure, requests.RequestException):
+            return clean_ws(str(failure)) or type(failure).__name__
+        r = failure
+        msg = ""
+        try:
+            body = r.json()
+        except ValueError:
+            body = None
+        if isinstance(body, dict) and body.get("error"):
+            err = body["error"]
+            msg = err if isinstance(err, str) else json.dumps(err, ensure_ascii=False)
+        if not msg:  # not JSON: a plain-text or HTML error page (e.g. from a proxy in front of Ollama)
+            msg = re.sub(r"<[^>]+>", " ", r.text or "")
+        msg = clean_ws(msg)[:500] or r.reason or "no details given"
+        text = msg if r.status_code == 200 else f"HTTP {r.status_code}: {msg}"
+        for pattern, hint in OLLAMA_HINTS:
+            if re.search(pattern, msg, re.I):
+                return f"{text.rstrip('. ')}. Hint: {hint.format(model=self.model)}"
+        return text
+
     def check(self) -> None:
         try:
             r = self.session.get(f"{self.url}/api/tags", timeout=10)
-            r.raise_for_status()
         except requests.RequestException as e:
-            log.debug("Ollama check failed: %s", e)
+            log.debug("Ollama check failed: %s", self.read_error(e))
             raise ServiceError(f"Cannot reach Ollama at {self.url}. Is Ollama running (`ollama serve`)?") from e
+        if r.status_code != 200:
+            raise ServiceError(f"Ollama at {self.url} answered with an error: {self.read_error(r)}")
         names = set()
         for m in r.json().get("models", []):
             names.update(filter(None, (m.get("name"), m.get("model"))))
@@ -849,36 +897,56 @@ class Ollama:
         if self.think is not None:
             payload["think"] = bool(self.think)
         problem = ""
-        for attempt in range(3):
+        tries = 3
+        for attempt in range(1, tries + 1):
             try:
                 r = self.session.post(f"{self.url}/api/chat", json=payload, timeout=self.timeout)
             except requests.RequestException as e:
-                raise ServiceError(f"Ollama request failed: {e}") from e
-            if r.status_code != 200:
-                problem = f"HTTP {r.status_code}: {r.text[:300]}"
+                raise ServiceError(f"Ollama request failed: {self.read_error(e)}") from e
+            try:
+                body = r.json()
+            except ValueError:
+                body = None
+            if r.status_code != 200 or not isinstance(body, dict) or body.get("error"):
+                problem = self.read_error(r)
                 if r.status_code in (400, 404):
                     raise ServiceError(f"Ollama rejected the request - {problem}")
-                time.sleep(2 * (attempt + 1))
+                log.warning("    Ollama error (try %d of %d): %s", attempt, tries, problem)
+                if attempt < tries:
+                    time.sleep(2 * attempt)
                 continue
-            content = ((r.json().get("message") or {}).get("content") or "").strip()
+            message = body.get("message") or {}
+            content = (message.get("content") or "").strip()
             content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content)
             try:
                 data = json.loads(content)
             except json.JSONDecodeError as e:
-                problem = f"invalid JSON ({e})"
+                problem = "empty answer" if not content else f"invalid JSON ({e})"
+                if body.get("done_reason") == "length":
+                    problem += ". Hint: the answer was cut off at the context limit, raise ollama.num_ctx"
+                elif not content and (message.get("thinking") or "").strip():
+                    problem += ". Hint: the model only wrote its reasoning, set think = false under [ollama]"
             else:
                 if isinstance(data, dict) and all(k in data for k in schema.get("required", [])):
                     return data
                 problem = "JSON is missing required fields"
-            payload["options"]["temperature"] = min(1.0, self.temperature + 0.3 * (attempt + 1))
+            log.debug("    unusable answer from %s (try %d of %d): %s\n%s", self.model, attempt, tries, problem,
+                      content[:2000])
+            payload["options"]["temperature"] = min(1.0, self.temperature + 0.3 * attempt)
         raise LLMError(f"unusable answer from {self.model}: {problem}")
 
     def unload(self) -> None:
         try:
-            self.session.post(f"{self.url}/api/generate", json={"model": self.model, "keep_alive": 0}, timeout=30)
+            r = self.session.post(f"{self.url}/api/generate", json={"model": self.model, "keep_alive": 0}, timeout=30)
+        except requests.RequestException as e:
+            log.warning("Could not unload %s from Ollama, so its GPU memory stays in use: %s",
+                        self.model, self.read_error(e))
+            return
+        if r.status_code == 200:
             log.info("Unloaded %s from Ollama to free GPU memory", self.model)
-        except requests.RequestException:
-            pass
+        else:
+            log.warning("Could not unload %s from Ollama, so its GPU memory stays in use: %s",
+                        self.model, self.read_error(r))
 
 
 # =============================================================================

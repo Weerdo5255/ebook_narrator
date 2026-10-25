@@ -281,6 +281,10 @@ ComfyUI starts, and ComfyUI's image model is unloaded before speech, so an 8-12 
 
 - **"Cannot reach Ollama/ComfyUI"** - start them, or fix the `url` in `config.toml`.
 - **"model ... is not installed"** - `ollama pull <model>`.
+- **"Ollama error ..." / "Ollama rejected the request ..."** - the message is Ollama's own error, followed by a
+  hint for the common ones (model not pulled, out of memory, crashed model process, unsupported `think`, busy
+  server, answer cut off at the context limit). Run with `-v` to also see any answer the model gave that could
+  not be used.
 - **"was saved in ComfyUI's normal (UI) format"** - re-export with Export (API).
 - **"uses node(s) this ComfyUI does not have"** - install the custom node pack it names and restart
   ComfyUI (for the comic, or switch `comic.panel_workflow` to `workflows/image_sdxl.json`).
