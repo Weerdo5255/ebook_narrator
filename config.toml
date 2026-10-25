@@ -1,0 +1,127 @@
+# epub_narrator configuration. Every setting is optional; missing ones use the defaults shown here.
+# Relative paths are resolved from this file's folder.
+
+output_dir = "output"
+
+[ollama]
+url = "http://127.0.0.1:11434"
+model = "llama3.1:8b"          # any chat model you have pulled: qwen2.5:14b, gemma3:12b, mistral-nemo ...
+temperature = 0.2
+num_ctx = 8192                 # context window; passages are ~1,000 tokens
+timeout = 600                  # seconds per request
+unload_when_done = true        # unload the model before ComfyUI starts, to free GPU memory
+# think = false                # uncomment for "thinking" models (qwen3, deepseek-r1) to skip their reasoning
+
+[comfyui]
+url = "http://127.0.0.1:8188"
+timeout = 1800                 # seconds allowed for one image or speech job
+poll_interval = 0.5
+free_memory_between_phases = true   # unload the image model before narration starts
+
+[chapters]
+use_toc = true                 # split by the book's table of contents (falls back to one file = one chapter)
+min_chars = 400                # skip sections shorter than this (title pages, dedications, part dividers)
+include_nonlinear = false      # include spine items marked linear="no" (usually notes or the cover)
+skip_titles = [                # regexes, case-insensitive, matched against the section title
+  "^(table of )?contents$", "^copyright", "^index$", "^cover$", "^title page$",
+  "^also by\\b", "^(about|other books by) the author",
+  "transcriber.?s notes?", "project gutenberg",
+]
+
+[images]
+enabled = true
+workflow = "workflows/image_sdxl.json"   # ComfyUI workflow exported with "Export (API)"
+threshold = 7                  # 0-10: how strongly a passage must describe a scene to get an illustration
+min_visual_details = 3         # ...and how many concrete visual details the LLM must find in the text
+max_per_chapter = 2
+max_total = 0                  # 0 = no limit for the whole book
+min_paragraphs_apart = 10      # keep illustrations in the same chapter apart
+window_chars = 3500            # size of each passage the LLM reads
+width = 1216
+height = 832
+style = "detailed digital painting, book illustration, cinematic lighting, rich color"
+negative_prompt = "text, letters, words, watermark, signature, logo, caption, frame, blurry, deformed, extra limbs, bad anatomy, low quality"
+max_width = 1600               # images wider than this are scaled down before going into the EPUB
+jpeg_quality = 88
+captions = true                # print a caption under each illustration
+
+[cover]
+enabled = true
+keep_original = false          # true = only make a cover when the book has none
+workflow = ""                  # empty = same workflow as [images]
+width = 832
+height = 1216
+style = "book cover art, dramatic composition, painterly, highly detailed"
+title_overlay = true           # print the title and author on the cover
+font = ""                      # .ttf/.otf for the cover lettering; empty = find a serif font
+
+[narration]
+enabled = true
+workflow = "workflows/tts_kokoro.json"   # ComfyUI TTS workflow exported with "Export (API)"
+llm_cleanup = true             # Ollama spells out numbers/abbreviations and drops footnote marks before TTS
+cleanup_group_chars = 2500
+chunk_chars = 500              # characters per TTS request; lower it if your TTS model cuts off long input
+speak_chapter_titles = true
+seed = 42                      # used for {{SEED}} in the TTS workflow, kept fixed so the voice stays consistent
+lead_in = 0.5                  # seconds of silence: start of track
+sentence_pause = 0.2           # between chunks inside a paragraph
+paragraph_pause = 0.6
+title_pause = 1.2
+scene_break_pause = 1.5
+tail = 1.5                     # end of track
+format = "mp3"                 # mp3 | m4a | m4b | opus | flac | wav
+bitrate = "64k"                # mono speech, so 64k sounds fine (~29 MB per hour)
+sample_rate = 44100
+normalize_loudness = true      # even out volume across chapters (ffmpeg loudnorm)
+embed_cover = true             # put the cover art in each audio file's tags
+retries = 2                    # retries per speech chunk before a chapter is marked failed
+
+[comic]
+enabled = false                # --comic turns this on for one run (comic only); true = also on every full run
+panel_workflow = "workflows/comic_panel_sdxl_ipadapter.json"   # draws panels using the character portraits
+                               # without IPAdapter installed: "workflows/image_sdxl.json" (text descriptions only)
+character_workflow = ""        # workflow for the reference portraits; empty = same as [images]
+cast_scope = "book"            # book = read the whole book before designing characters (complete, stable cast)
+                               # selected = read only the --chapters you ask for (quicker tests)
+read_chars = 6000              # passage size the LLM reads for plot and characters
+max_cast = 12                  # characters that get a fixed design and a reference portrait
+min_presence = 2               # ...if they appear in at least this many passages
+pages_per_1000_words = 0.6     # comic length; a 5,000-word chapter becomes 3 pages (--pages N overrides)
+min_pages = 1                  # per chapter
+max_pages = 10
+panels_per_page = 5
+max_panels_per_page = 6
+style = "graphic novel illustration, single panel, bold clean ink lines, flat cel shading, rich colors, dramatic lighting"
+negative_prompt = "text, speech bubble, word balloon, letters, words, caption, signature, watermark, logo, multiple panels, panel grid, comic strip layout, split screen, border, blurry, deformed, extra limbs, bad anatomy, low quality"
+portrait_style = "character design portrait, upper body, facing the viewer, neutral expression, plain light grey background, even studio lighting"
+portrait_size = 1024
+ref_weight = 0.75              # how strongly a portrait steers a panel with one character (0-1)
+ref_weight_multi = 0.6         # ...and a panel with several (too high and faces start to blend)
+megapixels = 1.0               # panel render size: about 1.0 for SDXL/Flux, 0.4 for SD 1.5
+page_width = 1600              # pixels; pages are 2:3 like a printed comic
+page_height = 2400
+margin = 50                    # these four are in pixels at 1600 px page width and scale with it
+gutter = 22
+border = 5
+font_size = 30
+font = ""                      # lettering font (.ttf/.otf); empty = look for a comic font, see README
+title_font = ""                # chapter titles, cast names, cover title
+sfx_font = ""                  # sound effects
+uppercase = true               # classic all-caps comic lettering
+cover = true                   # a comic cover with the main character
+cast_page = true               # a "The Characters" page after the cover
+page_numbers = true
+split = "book"                 # book = one .cbz; chapter = one .cbz per chapter in comic/
+jpeg_quality = 90
+
+# Change a character's look. Use the name the cast list shows (--script-only prints it).
+# Any of: gender, age, build, skin, hair, eyes, face, outfit, accessories, short (the nickname
+# used in prompts), look (replaces the whole description), seed (re-roll the portrait), image
+# (your own reference picture instead of a generated portrait).
+#
+# [comic.cast."Elizabeth Bennet"]
+# hair = "dark brown curls pinned up"
+# outfit = "pale green muslin dress"
+#
+# [comic.cast."Mr. Darcy"]
+# image = "refs/darcy.png"

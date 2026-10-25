@@ -1,0 +1,27 @@
+{
+  "1": {
+    "class_type": "KokoroSpeaker",
+    "inputs": {
+      "speaker_name": "af_heart"
+    },
+    "_meta": {"title": "Kokoro Speaker"}
+  },
+  "2": {
+    "class_type": "KokoroGenerator",
+    "inputs": {
+      "text": "{{TEXT}}",
+      "speaker": ["1", 0],
+      "speed": 1.0,
+      "lang": "English"
+    },
+    "_meta": {"title": "Kokoro Generator"}
+  },
+  "3": {
+    "class_type": "SaveAudio",
+    "inputs": {
+      "audio": ["2", 0],
+      "filename_prefix": "audio/epub_narrator"
+    },
+    "_meta": {"title": "Save Audio (FLAC)"}
+  }
+}

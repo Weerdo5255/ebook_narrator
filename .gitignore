@@ -1,0 +1,17 @@
+# Generated books, audio, comics and the resume cache
+output/
+
+# Lettering fonts are usually licensed; keep them local
+fonts/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
