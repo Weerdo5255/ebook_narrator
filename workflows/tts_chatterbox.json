@@ -1,0 +1,32 @@
+{
+  "6": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "audio_sample.wav"
+    },
+    "_meta": {"title": "Voice sample (in ComfyUI/input)"}
+  },
+  "4": {
+    "class_type": "FL_ChatterboxTTS",
+    "inputs": {
+      "text": "{{TEXT}}",
+      "exaggeration": 0.5,
+      "cfg_weight": 0.5,
+      "temperature": 0.8,
+      "seed": "{{SEED}}",
+      "use_cpu": false,
+      "keep_model_loaded": true,
+      "audio_prompt": ["6", 0]
+    },
+    "_meta": {"title": "FL Chatterbox TTS"}
+  },
+  "8": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "filename_prefix": "audio/epub_narrator",
+      "format": "flac",
+      "audio": ["4", 0]
+    },
+    "_meta": {"title": "Save Audio (Advanced)"}
+  }
+}

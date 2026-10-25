@@ -57,10 +57,13 @@ font = ""                      # .ttf/.otf for the cover lettering; empty = find
 
 [narration]
 enabled = true
-workflow = "workflows/tts_kokoro.json"   # ComfyUI TTS workflow exported with "Export (API)"
+workflow = "workflows/tts_chatterbox.json"   # ComfyUI TTS workflow exported with "Export (API)"
+                               # Chatterbox clones the voice in ComfyUI/input/audio_sample.wav;
+                               # "workflows/tts_kokoro.json" uses a built-in Kokoro voice instead (faster)
 llm_cleanup = true             # Ollama spells out numbers/abbreviations and drops footnote marks before TTS
 cleanup_group_chars = 2500
-chunk_chars = 500              # characters per TTS request; lower it if your TTS model cuts off long input
+chunk_chars = 300              # characters per TTS request; short pieces keep Chatterbox reliable
+                               # (Kokoro is fine with 500); lower it if speech gets cut off or garbled
 speak_chapter_titles = true
 seed = 42                      # used for {{SEED}} in the TTS workflow, kept fixed so the voice stays consistent
 lead_in = 0.5                  # seconds of silence: start of track

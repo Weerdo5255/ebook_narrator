@@ -147,10 +147,10 @@ DEFAULT_CONFIG: dict = {
     },
     "narration": {
         "enabled": True,
-        "workflow": "workflows/tts_kokoro.json",
+        "workflow": "workflows/tts_chatterbox.json",  # or workflows/tts_kokoro.json
         "llm_cleanup": True,  # let Ollama expand numbers/abbreviations for speech
         "cleanup_group_chars": 2500,
-        "chunk_chars": 500,  # max characters sent to the TTS model at once
+        "chunk_chars": 300,  # max characters sent to the TTS model at once
         "speak_chapter_titles": True,
         "seed": 42,
         "lead_in": 0.5,  # seconds of silence at the start of each track
@@ -3616,6 +3616,7 @@ class ComicMaker:
 NODE_PACKS = {
     "IPAdapter": "ComfyUI_IPAdapter_plus (in ComfyUI Manager search for \"IPAdapter plus\") plus its models",
     "Kokoro": "comfyui-kokoro (in ComfyUI Manager search for \"Kokoro\")",
+    "FL_Chatterbox": "ComfyUI_Fill-ChatterBox (in ComfyUI Manager search for \"Fill-ChatterBox\")",
 }
 
 

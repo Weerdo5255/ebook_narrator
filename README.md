@@ -51,11 +51,22 @@ bigger model makes a real difference: it writes better scripts and keeps track o
 - *Images:* put an SDXL checkpoint in `ComfyUI/models/checkpoints/` and make sure its file name
   matches `ckpt_name` in `workflows/image_sdxl.json` (default `sd_xl_base_1.0.safetensors`).
   Any SDXL fine-tune works; you can also swap in your own workflow (Flux, SD3, ...) - see section 4.
-- *Speech:* install the **comfyui-kokoro** custom node (in ComfyUI Manager search for "Kokoro", or
-  `git clone https://github.com/stavsap/comfyui-kokoro` into `ComfyUI/custom_nodes/` and
-  `pip install -r requirements.txt` inside it). The model downloads itself on first use.
-  The voice is set in `workflows/tts_kokoro.json` (`speaker_name`, default `af_heart`; for a British
-  voice such as `bm_george` also set `lang` to `English (British)`).
+- *Speech:* the default workflow, `workflows/tts_chatterbox.json`, reads the book in a voice cloned from
+  a recording you provide, using Chatterbox.
+  - Install the **ComfyUI_Fill-ChatterBox** custom node (in ComfyUI Manager search for "Fill-ChatterBox",
+    or `git clone https://github.com/filliptm/ComfyUI_Fill-ChatterBox` into `ComfyUI/custom_nodes/` and
+    `pip install -r requirements.txt` inside it). The model downloads itself on first use.
+  - Put the voice to clone in `ComfyUI/input/` as `audio_sample.wav`: a short, clean recording of one
+    speaker with no music or background noise. To use another file name, change `audio` in the workflow.
+  - The delivery is set in the workflow: `exaggeration` (how expressive), `cfg_weight` (pace and how
+    closely it follows the sample) and `temperature`. The seed comes from `narration.seed`, so every
+    chapter sounds the same.
+
+  For a faster, built-in voice instead, set `narration.workflow = "workflows/tts_kokoro.json"` and install
+  the **comfyui-kokoro** custom node (ComfyUI Manager: "Kokoro", or
+  `git clone https://github.com/stavsap/comfyui-kokoro`). Its voice is set in `workflows/tts_kokoro.json`
+  (`speaker_name`, default `af_heart`; for a British voice such as `bm_george` also set `lang` to
+  `English (British)`).
 - *Comic (optional):* install **ComfyUI_IPAdapter_plus** (ComfyUI Manager: "ComfyUI IPAdapter plus",
   or `git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus` into `ComfyUI/custom_nodes/`). It
   lets every panel use the characters' reference portraits. It needs two model files:
@@ -267,7 +278,8 @@ Rough guide for a 100,000-word novel on a single consumer GPU:
 - scene analysis: ~170 LLM requests (one per ~3,500-character passage)
 - text cleanup: ~250 LLM requests (the slowest LLM part; `--no-cleanup` skips it)
 - illustrations: a few dozen images
-- narration: about 11 hours of audio. Kokoro is fast; voice-cloning models can take far longer.
+- narration: about 11 hours of audio. Chatterbox clones a voice and is much slower than Kokoro, so time a
+  chapter first (`--chapters 1 --no-images --no-cover`).
 - comic: ~100 LLM requests to read the book, one per chapter to plan it and one per page to script it;
   about 60 pages, so 300+ panels plus a dozen portraits. At 10-20 seconds per SDXL panel that is one
   to two hours of drawing; try a chapter or two first.
@@ -290,6 +302,9 @@ ComfyUI starts, and ComfyUI's image model is unloaded before speech, so an 8-12 
   ComfyUI (for the comic, or switch `comic.panel_workflow` to `workflows/image_sdxl.json`).
 - **"ComfyUI rejected the workflow: ... ckpt_name ..."** - the checkpoint file name in the workflow
   does not match a file in `models/checkpoints/`.
+- **"ComfyUI rejected the workflow: ... audio_sample.wav ..."** - the voice sample for Chatterbox is not
+  in `ComfyUI/input/`; see section 1.
+- **Narration cuts off mid-sentence or turns garbled** - lower `narration.chunk_chars` (try 200).
 - **"ClipVision model not found" / "IPAdapter model not found"** - the IPAdapter model files are
   missing or misnamed; see section 1.
 - **Wrong chapter split** - check `--list-chapters`. Sections shorter than `chapters.min_chars` and
